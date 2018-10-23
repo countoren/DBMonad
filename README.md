@@ -55,5 +55,6 @@ from firstString in DB.command("some sql query", "some hana query")
 from secondString in DB.command("some sql query2", "some hana query2")
                     .then(c=> c.ExecuteScalar()).Map(Convert.ToString)
 select $"{firstString} , {secondString}";
-```
+
 dbConputions.Run(ServerPlatform.Hana, "connection string");
+```
