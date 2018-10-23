@@ -1,23 +1,23 @@
 # DBMonad - SQL and HANA
 
-## Impertive to Functional
+## Imperative to Functional
 
 This library was made to make the .net DB Client(DBConnection , DBCommand...) interface more reusable by providing monadic API.
-Moving from imprative interface to more functional one.
-All the main functionality is build in static methods
+Moving from imperative interface to more functional one.
+All the main functionality is built in static methods
 
-## Unifing DB providers - less verbosity
+## Unifying DB providers - less verbosity
 
-The DB Providers are not exposed(except of then method which expose the DBCommand in order to chose quering method)
-This reduce the verbosity that exists in the current DB Client's interface.
+The DB Providers are not exposed (except "Then" method which exposes the DBCommand to choose the quering method)
+therefore reduce the verbosity that exists in the current DB Client's interface.
 
-## Reusablity
+## Reusability
 
-the Queries<T> type "holds" a db compution that can be composed from other Queries(with the parameter) throfor it can be stored in a variable/returned from a method without actually evaluating the experions.
+the Queries<T> type "holds" a DB computation that can be composed of other Queries(with their DB parameters) therefore it can be stored in a variable or returned from a method without actually evaluating the expressions.
   
 ## Transactions
 
-to make a db compution(Queries<T>) to be in transaction just trigger RunWithTransaction instead of run.
+to make a DB computation(Queries<T>) to be in a transaction trigger RunWithTransaction instead of run.
 
 ## Simple Example:
 
@@ -56,5 +56,9 @@ from secondString in DB.command("some sql query2", "some hana query2")
                     .then(c=> c.ExecuteScalar()).Map(Convert.ToString)
 select $"{firstString} , {secondString}";
 
-dbConputions.Run(ServerPlatform.Hana, "connection string");
+dbComputions.Run(ServerPlatform.Hana, "connection string");
 ```
+
+## Notes
+
+At the moment the library has support for only SQL and Hana providers, but it should be pretty easy to add more.
