@@ -21,7 +21,7 @@ to make a DB computation(Queries<T>) to be in a transaction trigger RunWithTrans
 
 ## Simple Example:
 
-from this:
+.Net DB Client interface:
 ```
 DBConnection connection;
 if(isInSqlConfiguration)
@@ -38,7 +38,7 @@ if(isInHanaConfiguration)
 var result = dbCommand.ExecuteScalar();
 ```
 
-To this:
+DB Monad interface:
 ```
 var result = DB.command("some sql query", "some hana query")
 .Then(c=> c.ExecuteScalar())
