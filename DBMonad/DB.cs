@@ -1,9 +1,16 @@
-﻿using System;
+﻿using Optional;
+using Sap.Data.Hana;
+using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Data.Common;
+using System.Data.SqlClient;
+using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
+using TMDBConnector;
 
 namespace DBMonad
 {
@@ -433,7 +440,7 @@ namespace DBMonad
         public static Queries<T> Then<T>(this Func<DBState, DbCommand> commandFactory, Func<DbCommand, T> commandToExecute) =>
             dbState => (commandToExecute(commandFactory(dbState)), dbState);
 
-        //NON pure from DataAdapters returns
+        //DataAdapters 
         public static Queries<int> ThenDataAdapterFill(this Func<DBState, DbCommand> commandFactory, DataTable dt) =>
             commandFactory.Then(c => ToDASelectCommand(c)).Map(DataAdapter)
             .Map(ExecuteAndDispose(da => da.Fill(dt)));
@@ -456,7 +463,6 @@ namespace DBMonad
         #endregion
 
         #region Bind
-        // SelectMany: (State<TState, TSource>, TSource -> State<TState, TSelector>, (TSource, TSelector) -> TResult) -> State<TState, TResult>
         public static Queries<TSelector> FlatMap<T, TSelector>(
             this Queries<T> source,
             Func<T, Queries<TSelector>> selector) =>
@@ -509,9 +515,7 @@ namespace DBMonad
         //TODO: add error handling functor
         #endregion
 
-        #region Comonad
-
-
+        #region Execute
 
         public static T Run<T>(this Queries<T> queries, ServerPlatform sp, string connectionString) =>
             WithConnection(sp, connectionString, con =>
@@ -538,6 +542,20 @@ namespace DBMonad
 
         #endregion
 
+        #region State manipulation
+        public static Queries<Unit> SetTransaction(Func<DbConnection, DbTransaction, DbTransaction> handleState) =>
+            oldState =>
+            {
+                var newTrans = oldState.Transaction.Map(oldT =>
+                {
+                    var newT = handleState(oldState.Connection, oldT);
+                    if (!ReferenceEquals(oldT, newT)) oldT.Dispose();
+                    return newT;
+                });
+                return (Prelude.unit, new DBState(oldState.Connection, newTrans));
+            };
+        #endregion
+
         public static Queries<Option<T, TError>> Catch<T, TException, TError>
             (this Queries<T> queries, Func<TException, TError> handleException)
             where TException : Exception =>
@@ -559,20 +577,6 @@ namespace DBMonad
             pred ? queries : s => (default(T), s);
         public static Queries<T> RunIf<T>(this Queries<T> queries, bool pred, T alternativeValue) =>
             pred ? queries : s => (alternativeValue, s);
-
-        #region State manipulation
-        public static Queries<Unit> SetTransaction(Func<DbConnection, DbTransaction, DbTransaction> handleState) =>
-            oldState =>
-            {
-                var newTrans = oldState.Transaction.Map(oldT =>
-                {
-                    var newT = handleState(oldState.Connection, oldT);
-                    if (!ReferenceEquals(oldT, newT)) oldT.Dispose();
-                    return newT;
-                });
-                return (Prelude.unit, new DBState(oldState.Connection, newTrans));
-            };
-        #endregion
     }
 
     //Usage Example
