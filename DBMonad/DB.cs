@@ -342,7 +342,7 @@ namespace DBMonad
                     hana => new HanaParameter(hanaParamName(p.ParameterName), p.HanaType)
                 );
 
-                p.Value.MatchSome(v => param.Value = v);
+                param.Value = p.Value.ValueOr(DBNull.Value);
                 p.Size.MatchSome(s => param.Size = s);
                 command.Parameters.Add(param);
             });
