@@ -406,6 +406,22 @@ namespace DBMonad
         #endregion
 
         #region Helpers
+
+        /// <summary>
+        /// Use Read on the data reader and convert it to dictionary 
+        /// if read returns false None is return else Dictionary
+        /// </summary>
+        public static Queries<Option<Dictionary<string,object>>> ReadRow(this Queries<DbDataReader> queryResult)
+        {
+            return queryResult.Map(dr =>
+                dr.SomeWhen(r => r.Read())
+                .Map(r =>
+                    Enumerable.Range(0, r.FieldCount)
+                    .ToDictionary(r.GetName, r.GetValue)
+                )
+            );
+        }
+
         public static T Match<T>(this DbConnection c, Func<SqlConnection, T> sqlHandler, Func<HanaConnection, T> hanaHandler) =>
             c is SqlConnection sqlC ? sqlHandler(sqlC) :
             c is HanaConnection hanaC ? hanaHandler(hanaC) :
