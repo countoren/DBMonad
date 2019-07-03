@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
 using System.Data.SqlClient;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -115,16 +116,21 @@ namespace DBMonad
     {
         public readonly ServerPlatform ServerPlatform;
         public readonly string ConnectionString;
-        public DBConnectionString(ServerPlatform serverPlatform, string connectionString) =>
-            (ServerPlatform, ConnectionString) = (serverPlatform, connectionString);
+        public readonly Assembly AssemblyWithEmbResourcesQueries;
+
+        public DBConnectionString(ServerPlatform serverPlatform, string connectionString)=>
+            (ServerPlatform, ConnectionString, AssemblyWithEmbResourcesQueries) = 
+            (serverPlatform, connectionString, DB.GetCallerAssembly());
+
+        public DBConnectionString(ServerPlatform serverPlatform, string connectionString, Assembly queriesAssembly)=>
+            (ServerPlatform, ConnectionString, AssemblyWithEmbResourcesQueries) = 
+            (serverPlatform, connectionString, queriesAssembly);
         public void Deconstruct(out ServerPlatform sp, out string cs) =>
             (sp, cs) = (ServerPlatform, ConnectionString);
 
-        public override string ToString()
-        {
-            return ConnectionString;
-        }
+        public override string ToString()=> ConnectionString;
     }
+
     public class DBConnectionData : DBConnectionString
     {
         public readonly string Server;
@@ -357,10 +363,14 @@ namespace DBMonad
         public static DbCommand CommandFromFile(DBState dbState, string fileName, params DbParameter[] ps)
         {
             var fileExtension = dbState.Connection.Match(sql => "sql", hana => "hana");
-            var query = QueryFromFile(fileName, fileExtension);
+
+            var query = QueryFromFile( 
+                dbState.AssemblyWithEmbResourcesQueries,
+                fileName, fileExtension
+            );
+
             return Command(dbState, query, query, ps);
         }
-
         //Command extensions
         public static DbCommand SetParameterValue(this DbCommand c, string parameterName, object value)
         {
@@ -382,14 +392,32 @@ namespace DBMonad
         #endregion
 
         #region Query from files
-        public static string QueryFromFile(string name, string queryFileExtension)
+
+
+        public static Assembly GetCallerAssembly()
+        {
+            //Use stacktrace to find the first assembly in the call stack that is not 
+            //This assembly (DBConnector)
+            //This is should be a more expensive operation should be executed as little as possible
+            var currentAssembly = Assembly.GetExecutingAssembly();
+            var callerAssemblies = 
+                new StackTrace().GetFrames()
+                .Select(x => x.GetMethod().ReflectedType.Assembly).Distinct()
+                .First(x => x.FullName != currentAssembly.FullName);
+
+            return callerAssemblies;
+        }
+
+        public static string QueryFromFile(Assembly assemblyWithEmbResourcesQueries, string name, string queryFileExtension)
         {
             string fileName = $"{name}.{queryFileExtension}";
 
-            Assembly asm = Assembly.GetExecutingAssembly();
-            string fullName =
+            var asm = assemblyWithEmbResourcesQueries;
+
+            string fullName = 
                 asm.GetManifestResourceNames().FirstOrDefault(r => r.EndsWith(fileName)).SomeNotNull()
-                .ValueOr(() => throw new Exception($"Can not find {fileName} resource query"));
+                .ValueOr(()=> throw new Exception($"DBConnector:QueryFromFile:" +
+                $"Can not find {fileName} resource query, in {asm.FullName} Assembly.") );
 
             Stream stream = asm.GetManifestResourceStream(fullName);
             var sr = new StreamReader(stream);
@@ -403,6 +431,10 @@ namespace DBMonad
 
             return retVal;
         }
+
+        public static string QueryFromFile(string name, string queryFileExtension)=>
+            QueryFromFile(Assembly.GetExecutingAssembly(), name, queryFileExtension);
+
         #endregion
 
         #region Helpers
@@ -436,8 +468,13 @@ namespace DBMonad
     {
         public DbConnection Connection;
         public Option<DbTransaction> Transaction;
+        public Assembly AssemblyWithEmbResourcesQueries;
         public DBState(DbConnection c, Option<DbTransaction> t = new Option<DbTransaction>()) =>
-            (Connection, Transaction) = (c, t);
+            (Connection, Transaction,AssemblyWithEmbResourcesQueries) = (c, t, DB.GetCallerAssembly());
+
+        public DBState(DbConnection c, Assembly assemblyWithEmbResourcesQueries, Option<DbTransaction> t = new Option<DbTransaction>()) =>
+                  (Connection, Transaction, AssemblyWithEmbResourcesQueries) = 
+            (c, t, assemblyWithEmbResourcesQueries);
 
         public void Deconstruct(out DbConnection c, out Option<DbTransaction> t) =>
             (c, t) = (Connection, Transaction);
@@ -605,6 +642,7 @@ namespace DBMonad
             Queries<bool> d2 = s => (false, s);
             Queries<int> d3 = s => (2, s);
 
+
             Queries<string> qs =
                 from x in a
                 from x2 in Command("sdlfkj", "fdslkfjds", new DbParameter.BigInt("IN", 13))
@@ -616,7 +654,7 @@ namespace DBMonad
                 from _ in SetTransaction((c, t) => { t.Commit(); return c.BeginTransaction(); })
                 select x2;
 
-            qs.Run(ServerPlatform.Hana, "connectionstring");
+            qs.RunWithTransaction(ServerPlatform.Hana, "connectionstring");
 
 
             var bolOfRead =
