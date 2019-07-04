@@ -294,8 +294,8 @@ namespace DBMonad
             }
             else if (command.cmd is HanaCommand hanaC)
             {
-                dataAdapter = new SqlDataAdapter();
-                hanaC.Parameters.Cast<SqlParameter>().ToList().ForEach(p =>
+                dataAdapter = new HanaDataAdapter();
+                hanaC.Parameters.Cast<HanaParameter>().ToList().ForEach(p =>
                 {
                     if (command.DbParamToColumnNameMap.TryGetValue(p.ParameterName, out Option<string> maybeColumnName))
                         maybeColumnName.MatchSome(cn => p.SourceColumn = cn);
