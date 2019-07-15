@@ -8,6 +8,8 @@ using System.Data.SqlClient;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Reactive;
+using System.Reactive.Linq;
 using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
@@ -163,7 +165,7 @@ namespace DBMonad
             var dbStr =
                 database.Map(db =>
                     serverPlatform == ServerPlatform.Sql ?
-                    $"Initial Catalog={database};" : $"CS={database};"
+                    $"Initial Catalog={db};" : $"CS={db};"
                 ).ValueOr("");
 
             var authStr =
@@ -439,20 +441,20 @@ namespace DBMonad
 
         #region Helpers
 
+        public static IEnumerable<Dictionary<string,object>> ToEnumerable(this DbDataReader r)
+        {
+            while (r.Read()) yield return r.ToRow();
+        }
+
+        public static Dictionary<string, object> ToRow(this DbDataReader r) =>
+            Enumerable.Range(0, r.FieldCount).ToDictionary(r.GetName, r.GetValue);
+
         /// <summary>
         /// Use Read on the data reader and convert it to dictionary 
         /// if read returns false None is return else Dictionary
         /// </summary>
-        public static Queries<Option<Dictionary<string,object>>> ReadRow(this Queries<DbDataReader> queryResult)
-        {
-            return queryResult.Map(dr =>
-                dr.SomeWhen(r => r.Read())
-                .Map(r =>
-                    Enumerable.Range(0, r.FieldCount)
-                    .ToDictionary(r.GetName, r.GetValue)
-                )
-            );
-        }
+        public static Queries<Option<Dictionary<string,object>>> ReadRow(this Queries<DbDataReader> queryResult)=>
+            queryResult.Map(dr => dr.SomeWhen(r => r.Read()).Map(ToRow) );
 
         public static T Match<T>(this DbConnection c, Func<SqlConnection, T> sqlHandler, Func<HanaConnection, T> hanaHandler) =>
             c is SqlConnection sqlC ? sqlHandler(sqlC) :
@@ -485,7 +487,7 @@ namespace DBMonad
     public static partial class DB
     {
         #region Return
-        public static Queries<Unit> NewQueries() => s => (Prelude.unit, s);
+        public static Queries<TMDBConnector.Unit> NewQueries() => s => (Prelude.unit, s);
         public static Queries<T> NewQueries<T>() => s => (default(T), s);
         public static Queries<T> ToQueries<T>(this T value) =>
             dbState => (value, dbState);
@@ -596,7 +598,7 @@ namespace DBMonad
         #endregion
 
         #region State manipulation
-        public static Queries<Unit> SetTransaction(Func<DbConnection, DbTransaction, DbTransaction> handleState) =>
+        public static Queries<TMDBConnector.Unit> SetTransaction(Func<DbConnection, DbTransaction, DbTransaction> handleState) =>
             oldState =>
             {
                 var newTrans = oldState.Transaction.Map(oldT =>
@@ -632,6 +634,21 @@ namespace DBMonad
             pred ? queries : s => (alternativeValue, s);
     }
 
+
+    //Streaming
+    public static partial class DB
+    {
+        public static IObservable<T> ToObservable<T>(this Queries<IEnumerable<T>> qs, DBConnectionString con) =>
+            Observable.Using(() => GetConnection(con)
+            , c =>
+                {
+                    c.Open();
+                    return qs(new DBState(c, Option.None<DbTransaction>())).Value.ToObservable();
+                }
+            );
+    }
+
+
     //Usage Example
     public static partial class DB
     {
@@ -641,6 +658,7 @@ namespace DBMonad
             Queries<string> d1 = s => ("", s);
             Queries<bool> d2 = s => (false, s);
             Queries<int> d3 = s => (2, s);
+            var connection = new DBConnectionString(ServerPlatform.Hana, "");
 
 
             Queries<string> qs =
@@ -670,7 +688,24 @@ namespace DBMonad
                 )
                 .RunWithTransaction(ServerPlatform.Hana, "sdfsdf");
 
+            //Streaming 
+            var dbMainStream = CommandFromFile("selectALotOfRowsQuery").Then(c => c.ExecuteReader())
+                .Map(ToEnumerable).ToObservable(connection);
 
+            var stopTrigger =
+                Observable.Interval(TimeSpan.FromSeconds(2))
+                .Select(_ =>
+                    CommandFromFile("checkIfTableHasNewRows").Then(c => c.ExecuteScalar()).Map(Convert.ToInt32)
+                    .Run(connection)
+                );
+
+            var bigQueryWithRefresh = dbMainStream.WithLatestFrom(stopTrigger, (d,i)=> (d:d,i:i))
+                .TakeWhile(t=>(int)t.d["c1"]<t.i).Select(t=> t.d)
+                ;
+
+
+            //bigQueryWithRefresh.Subscribe(row => Console.WriteLine(row["c2"]));
+            stopTrigger.Subscribe(row => Console.WriteLine(row.ToString()));
 
         }
     }
