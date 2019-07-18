@@ -441,9 +441,14 @@ namespace DBMonad
 
         #region Helpers
 
-        public static IEnumerable<Dictionary<string,object>> ToEnumerable(this DbDataReader r)
+        /// <summary>
+        /// This function will return IEnumerable of the rows as DataReaders 
+        /// Note that the connection must be open (or executed with in the queries monad)
+        /// when iterating over the rows
+        /// </summary>
+        public static IEnumerable<DbDataReader> EnumerateRows(this DbCommand c)
         {
-            while (r.Read()) yield return r.ToRow();
+            using (var reader = c.ExecuteReader()) while (reader.Read()) yield return reader;
         }
 
         public static Dictionary<string, object> ToRow(this DbDataReader r) =>
@@ -455,6 +460,25 @@ namespace DBMonad
         /// </summary>
         public static Queries<Option<Dictionary<string,object>>> ReadRow(this Queries<DbDataReader> queryResult)=>
             queryResult.Map(dr => dr.SomeWhen(r => r.Read()).Map(ToRow) );
+
+
+        #region Values Convertions
+        public static string ToString(object v) => v.CastObjTo<string>();
+        public static int? ToInt(object v) => v.CastTo<int>();
+        public static decimal? ToDecimal(object v) => v.CastTo<decimal>();
+
+        //Casting and handling DBNulls
+        private static T? CastTo<T>(this object dbValue) where T : struct
+        {
+            if (dbValue == DBNull.Value) return null;
+            return (T)dbValue;
+        }
+        private static T CastObjTo<T>(this object dbValue) where T : class
+        {
+            if (dbValue == DBNull.Value) return null;
+            return (T)dbValue;
+        }
+        #endregion
 
         public static T Match<T>(this DbConnection c, Func<SqlConnection, T> sqlHandler, Func<HanaConnection, T> hanaHandler) =>
             c is SqlConnection sqlC ? sqlHandler(sqlC) :
@@ -689,8 +713,8 @@ namespace DBMonad
                 .RunWithTransaction(ServerPlatform.Hana, "sdfsdf");
 
             //Streaming 
-            var dbMainStream = CommandFromFile("selectALotOfRowsQuery").Then(c => c.ExecuteReader())
-                .Map(ToEnumerable).ToObservable(connection);
+            var dbMainStream = CommandFromFile("selectALotOfRowsQuery")
+                .Then(EnumerateRows).ToObservable(connection);
 
             var stopTrigger =
                 Observable.Interval(TimeSpan.FromSeconds(2))

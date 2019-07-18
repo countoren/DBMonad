@@ -22,8 +22,7 @@ namespace DBMonad.Tests
 
             //Streaming 
             var dbMainStream = DB.Command("select *, (select max(c1) from test1)[max] from test1 WITH(NOLOCK)",null)
-                .Then(c => c.ExecuteReader())
-                .Map(DB.ToEnumerable).ToObservable(connection);
+                .Then(DB.EnumerateRows).ToObservable(connection);
 
             var stopTrigger =
                 Observable.Interval(TimeSpan.FromSeconds(2))
