@@ -362,17 +362,32 @@ namespace DBMonad
         public static Func<DBState, DbCommand> CommandFromFile(string fileName, params DbParameter[] ps) =>
             dbState => CommandFromFile(dbState, fileName, ps);
 
-        public static DbCommand CommandFromFile(DBState dbState, string fileName, params DbParameter[] ps)
+
+        public static DbCommand CommandFromFile(DBState dbState, string fileName, params DbParameter[] ps) =>
+        CommandFromFile(dbState, fileName, new string[] { } , ps);
+
+        /// <summary>
+        /// Create DBCommand based on embedded resource query file 
+        /// that will be searched in dbState.AssemblyWithEmbResourcesQueries 
+        /// based on fileName.[sql|hana] pattern - extension will be chosed based on dbState.Connection Type
+        /// </summary>
+        /// <param name="fileName">the query file name(without extensions)</param>
+        /// <param name="replaceInQueryStringList">will be used as a String.Format parameters to replace the query string. 
+        /// NOTE: this should not be used unless the source for this list is secured in order to avoid SQL injections</param>
+        /// <param name="ps"> DBMonad DBParameters which will be mapped to the correct DB Data provider Parameter</param>
+        /// <returns></returns>
+        public static DbCommand CommandFromFile(DBState dbState, string fileName, string[] replaceInQueryStringList, params DbParameter[] ps)
         {
             var fileExtension = dbState.Connection.Match(sql => "sql", hana => "hana");
 
-            var query = QueryFromFile( 
+            var query = string.Format(QueryFromFile( 
                 dbState.AssemblyWithEmbResourcesQueries,
                 fileName, fileExtension
-            );
+            ), replaceInQueryStringList);
 
             return Command(dbState, query, query, ps);
         }
+
         //Command extensions
         public static DbCommand SetParameterValue(this DbCommand c, string parameterName, object value)
         {
