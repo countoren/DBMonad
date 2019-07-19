@@ -359,8 +359,31 @@ namespace DBMonad
         }
 
 
+        /// <summary>
+        /// Create a factory function for a DBCommand which get the DBState 
+        /// the command will be created based on embedded resource query file 
+        /// that will be searched in dbState.AssemblyWithEmbResourcesQueries 
+        /// based on fileName.[sql|hana] pattern - extension will be chosed based on dbState.Connection Type
+        /// </summary>
+        /// <param name="fileName">the query file name(without extensions)</param>
+        /// <param name="ps"> DBMonad DBParameters which will be mapped to the correct DB Data provider Parameter</param>
+        /// <returns></returns>
         public static Func<DBState, DbCommand> CommandFromFile(string fileName, params DbParameter[] ps) =>
             dbState => CommandFromFile(dbState, fileName, ps);
+
+        /// <summary>
+        /// Create a factory function for a DBCommand which get the DBState 
+        /// the command will be created based on embedded resource query file 
+        /// that will be searched in dbState.AssemblyWithEmbResourcesQueries 
+        /// based on fileName.[sql|hana] pattern - extension will be chosed based on dbState.Connection Type
+        /// </summary>
+        /// <param name="fileName">the query file name(without extensions)</param>
+        /// <param name="replaceInQueryStringList">will be used as a String.Format parameters to replace the query string. 
+        /// NOTE: this should not be used unless the source for this list is secured in order to avoid SQL injections</param>
+        /// <param name="ps"> DBMonad DBParameters which will be mapped to the correct DB Data provider Parameter</param>
+        /// <returns></returns>
+         public static Func<DBState, DbCommand> CommandFromFile(string fileName,string[] replaceInQueryStringList, params DbParameter[] ps) =>
+            dbState => CommandFromFile(dbState, fileName, replaceInQueryStringList, ps);
 
 
         public static DbCommand CommandFromFile(DBState dbState, string fileName, params DbParameter[] ps) =>
