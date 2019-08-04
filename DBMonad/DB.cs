@@ -156,6 +156,7 @@ namespace DBMonad
             new DBConnectionData(ServerPlatform, Server, new ConnectionAuth.UserAndPass(user, password), Database);
     }
 
+
     public static partial class DB
     {
 
