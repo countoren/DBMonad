@@ -14,12 +14,8 @@ namespace DBMonad
 {
     public static class Sql
     {
-        public delegate (T value, DBState<TCon> state) Queries<T, TCon>(DBState<TCon> s)
-            where TCon : DbConnection;
+        public delegate (T value, TState state) Queries<T, TState>(TState s);
 
-        public delegate (T value, OneOf<DBState<TCon>, DBState<TCon2>> state) Queries<T, TCon, TCon2>(OneOf<DBState<TCon>, DBState<TCon2>> s)
-            where TCon : DbConnection
-            where TCon2 : DbConnection;
         public class DBState<C> where C : DbConnection
         {
             public C Connection;
@@ -31,29 +27,30 @@ namespace DBMonad
             public string cs;
         }
 
-        //public static Func<HanaConnection, HanaTransaction, HanaCommand> HanaCommand(string query, params HanaParameter[] ps) =>
-        //    (c,t) => Command<HanaConnection, HanaTransaction, HanaParameter, HanaCommand>(c, t, query, ps);
-        //public static Func<SqlConnection, SqlTransaction, SqlCommand> SqlCommand(string query, params SqlParameter[] ps) =>
-        //    (c,t) => Command<SqlConnection, SqlTransaction, SqlParameter, SqlCommand>(c, t, query, ps);
 
-        //public static Func<TCon, TTrans, TCom> Command<TCon, TTrans, TParam, TCom>(string query, params TParam[] ps)
-        //    where TCon : DbConnection
-        //    where TTrans : DbTransaction
-        //    where TParam : System.Data.Common.DbParameter
-        //    where TCom : DbCommand, new()
+        public static Func<DBState<TCon>, DbCommand> Command<TCon>(string query, params System.Data.Common.DbParameter[] ps) 
+            where TCon : DbConnection => 
+            s => Command(s.Connection, s.Transaction, query, ps);
+
+        public static Func<DBState<DbConnection>, DbCommand> Command(string query, params System.Data.Common.DbParameter[] ps) =>
+            Command<DbConnection>(query, ps);
+
+        //public static Func<DBState,DbCommand> CommandFromF(string fileName)
         //{
+        //    var q = "";
+
+            
         //}
 
-        public static Func<DBState<TCon>, DbCommand> Command<TCon>(string q, params DbParameter[] ps)
-            where TCon : DbConnection
-            => s => {
-                var cmd = s.Connection.CreateCommand();
-                cmd.CommandText = q;
-
-                s.Transaction.MatchSome(t => cmd.Transaction = t);
+        public static DbCommand Command(DbConnection connection, Option<DbTransaction> transaction, string query, params System.Data.Common.DbParameter[] ps)
+        {
+                var cmd = connection.CreateCommand();
+                cmd.CommandText = query;
+                transaction.MatchSome(t => cmd.Transaction = t);
                 cmd.Parameters.AddRange(ps);
                 return cmd;
-            };
+        }
+
         public static Func<OneOf<DBState<TCon>, DBState<TCon2>>, DbCommand> Or<TCon, TCon2>(
             this Func<DBState<TCon>, DbCommand> commandFactory, 
             Func<DBState<TCon2>, DbCommand> commandFactory2
@@ -61,23 +58,63 @@ namespace DBMonad
             where TCon2 : DbConnection
             => ss => ss.Match(commandFactory, commandFactory2);
 
-        public static Queries<T,TCon> Then<T,TCon>(
-            this Func<DBState<TCon>, DbCommand> commandFactory, 
-            Func<DbCommand, T> handler
+        public static Func<DBState<DbConnection>, DbCommand> Or<TCon>(
+            this Func<DBState<DbConnection>, DbCommand> commandFactory,
+            Func<DBState<TCon>, DbCommand> commandFactory2
             ) where TCon : DbConnection
-            => s => (handler(commandFactory(s)), s);
+            => s => s is DBState<TCon> s2 ? commandFactory2(s2) : commandFactory(s);
 
-        public static Queries<T,TCon, TCon2> Then<T,TCon, TCon2>(
-            this Func<OneOf<DBState<TCon>, DBState<TCon2>>, DbCommand> commandsFactory, 
-            Func<DbCommand, T> handler
+        public static Func<DBState<DbConnection>, DbCommand> Or<TCon>(
+            this Func<DBState<TCon>, DbCommand> commandFactory,
+             Func<DBState<DbConnection>, DbCommand> commandFactory2
             ) where TCon : DbConnection
-             where TCon2 : DbConnection
-            => s => (handler(commandsFactory(s)), s);
-        public static T Run<T, TCon>(this Queries<T, TCon> qs, string cs)
+            => s => s is DBState<TCon> s2 ? commandFactory(s2): commandFactory2(s);
+
+
+        public static Func<OneOf<DBState<TCon>, DBState<TCon2>, DBState<TCon3>>, DbCommand> Or<TCon, TCon2, TCon3>(
+            this Func<OneOf<DBState<TCon>, DBState<TCon2>>, DbCommand> commandsOptions,
+            Func<DBState<TCon3>, DbCommand> commandFactory2
+            ) where TCon : DbConnection
+            where TCon2 : DbConnection
+            where TCon3 : DbConnection
+            => ss => ss.TryPickT2(out var s3, out var reminder) ?
+                commandFactory2(s3) : commandsOptions(reminder);
+
+
+        public static Queries<T,TState> Then<T,TState>(
+            this Func<TState, DbCommand> commandFactory, 
+            Func<DbCommand, T> handler
+            ) => s => (handler(commandFactory(s)), s);
+
+
+        public static DbCommand AddParameters(this DbCommand cmd, params DbParameter[] ps) =>
+                ps.Select(dbP =>
+                {
+                    var p = cmd.CreateParameter();
+                    p.ParameterName = dbP.ParameterName;
+                    dbP.Value.MatchSome(v => p.Value = v);
+                    dbP.Size.MatchSome(sz => p.Size = sz);
+                    p.DbType = DbType.AnsiString;//TODO
+                    return p;
+                }).Aggregate(cmd, (acc, p) => { acc.Parameters.Add(p); return acc; });
+
+        public static Func<TState, DbCommand> AddParameters<TState>(
+            this Func<TState, DbCommand> commandFactory, 
+            params DbParameter[] ps
+            ) => s=> commandFactory(s).AddParameters(ps);
+
+
+
+        public static T Run<T, TCon>(this Queries<T, DBState<TCon>> qs, string cs)
             where TCon : DbConnection, new()
             => WithConnection<T, TCon>(cs, con => qs(new DBState<TCon> { Connection = con }).value);
 
-        public static T Run<T, TCon, TCon2>(this Queries<T, TCon, TCon2> qs,
+        public static T Run<T, TCon>(this Queries<T, DBState<DbConnection>> qs, DBConnectionString<TCon> cs)
+            where TCon : DbConnection, new()
+            => WithConnection<T, TCon>(cs.cs, con => qs(new DBState<DbConnection> { Connection = con }).value);
+
+
+        public static T Run<T, TCon, TCon2>(this Queries<T, OneOf<DBState<TCon>, DBState<TCon2>>> qs,
             OneOf<DBConnectionString<TCon>, DBConnectionString<TCon2>> css)
             where TCon : DbConnection, new()
             where TCon2 : DbConnection, new()
@@ -109,17 +146,28 @@ namespace DBMonad
 
     public static class test
     {
+
+
         public static void main()
         {
 
+            var b = 
+            Sql.Command("select 123 ")
+                .Or(Sql.Command<SqlConnection>("dsfsdfsdf")).Then(c => c.ExecuteScalar())
+                .Run(new Sql.DBConnectionString<SqlConnection> { cs = "" });
+
             Sql.Command<SqlConnection>("wefds").Then(c => c.ExecuteScalar()).Run("ff");
             //Sql.Command("xczx", new HanaParameter()).Then(c=> c.ExecuteScalar()).Map(Convert.ToString)
+            OneOf<string, int> v = "dsfsdf";
+            OneOf<string, int> v2 = 2;
+
 
             var a =
             Sql.Command<SqlConnection>("wefds")
             .Or(Sql.Command<HanaConnection>("fsfdsf"))
+            .AddParameters(new DbParameter.NVarChar("dafsdf"))
             
-            .Then(c=> c.ExecuteScalar())
+            .Then(c=>(string) c.ExecuteScalar())
             .Run(new Sql.DBConnectionString<SqlConnection> { cs = ""});
         }
 
