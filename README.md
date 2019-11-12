@@ -21,6 +21,21 @@ to make a DB computation(Queries<T>) to be in a transaction trigger RunWithTrans
 
 ## Simple Example:
 
+.Net DbProvider interface simple SqlConnection: 
+```
+  var connection = new SQLConnection("sql connection string");
+  var dbCommand = new SQLCommand("some sql query", connection);
+  var preProcessedResult = dbCommand.ExecuteScalar();
+  var result = Convert.ToDateTime(preProcessedResult);
+```
+
+DB Monad interface
+```
+  var result =  Command<SqlConnection>("some sql query")
+	  .Then(c=> c.ExecuteScalar()).Map(Convert.ToDateTime).Run("CS")
+```
+
+
 .Net DB Client interface:
 ```
 DBConnection connection;
@@ -40,25 +55,26 @@ var result = dbCommand.ExecuteScalar();
 
 DB Monad interface:
 ```
-var result = DB.command("some sql query", "some hana query")
+var result = Command<SqlConnection>("some sql query").Or(Command<HanaConnection>("some hana query"))
 .Then(c=> c.ExecuteScalar())
-.Run(ServerPlatform.Hana, "connection string")
+.Run(new DBConnectionString<SqlConnection>("connection string"))
 ```
 
 ## LINQ
 
 The query value can be "extracted" with from in linq syntax(do blocks in haskell):
 ```
-var dbComputions = 
-from firstString in DB.command("some sql query", "some hana query")
-                    .then(c=> c.ExecuteScalar()).Map(Convert.ToString)
-from secondString in DB.command("some sql query2", "some hana query2")
-                    .then(c=> c.ExecuteScalar()).Map(Convert.ToString)
-select $"{firstString} , {secondString}";
+var qs2 =
+	from queryResult in Command<SqlConnection>("select 3.2").Or(Command<HanaConnection>("select 4.3 from dummy"))
+						.Then(c => c.ExecuteScalar()).Map(Convert.ToDecimal)
+	from queryResult2 in Command<SqlConnection>("select 6.1").Or(Command<HanaConnection>("select 7.4 from dummy"))
+						.Then(c => c.ExecuteScalar()).Map(Convert.ToDecimal)
+	select (queryResult, queryResult2);
 
-dbComputions.Run(ServerPlatform.Hana, "connection string");
+
+var (mulDBR1, mulDBR2) = qs2.Run(new DBConnectionString<SqlConnection>(sqlCS));
+
+//Transactions
+var (mulDBR3, mulDBR4) = qs2.RunWithTransaction(new DBConnectionString<HanaConnection>(hanaCS));
+
 ```
-
-## Notes
-
-At the moment the library has support for only SQL and Hana providers, but it should be pretty easy to add more.
