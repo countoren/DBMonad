@@ -1,11 +1,9 @@
 ﻿using OneOf;
 using Optional;
-using Sap.Data.Hana;
 using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
-using System.Data.SqlClient;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -22,69 +20,67 @@ namespace DBMonad
     public abstract class DbParameter
     {
         public readonly string ParameterName;
-        public readonly SqlDbType SqlType;
-        public readonly HanaDbType HanaType;
+        public readonly DbType SqlType;
         public readonly Option<object> Value;
         public readonly Option<int> Size;
 
-        public DbParameter(string parameterName, SqlDbType sqlType, HanaDbType hanaType, object value = null, int? size = null)
+        public DbParameter(string parameterName, DbType dbType, object value = null, int? size = null)
         {
             ParameterName = parameterName;
-            SqlType = sqlType;
-            HanaType = hanaType;
+            SqlType = dbType;
             Value = value.SomeNotNull();
             Size = size.ToOption();
         }
         public class NVarChar : DbParameter
         {
             public NVarChar(string parmeterName, string value = null, int? size = null) :
-                base(parmeterName, SqlDbType.NVarChar, HanaDbType.NVarChar, value, size)
+                base(parmeterName, DbType.VarNumeric, value, size)
             { }
         }
         public class SmallInt : DbParameter
         {
             public SmallInt(string parmeterName, int? value = null) :
-                base(parmeterName, SqlDbType.SmallInt, HanaDbType.SmallInt, value)
+                base(parmeterName, DbType.UInt32, value)
             { }
         }
 
         public class BigInt : DbParameter
         {
             public BigInt(string parmeterName, int? value = null) :
-                base(parmeterName, SqlDbType.BigInt, HanaDbType.BigInt, value)
+                base(parmeterName, DbType.UInt64, value)
             { }
         }
 
         public class Boolean : DbParameter
         {
             public Boolean(string parmeterName, bool? value = null, int? size = null) :
-                base(parmeterName, SqlDbType.Bit, HanaDbType.Boolean, value, size)
+                base(parmeterName, DbType.Boolean, value, size)
             { }
         }
 
         public class DateTime : DbParameter
         {
             public DateTime(string parmeterName, System.DateTime? value = null) :
-                base(parmeterName, SqlDbType.DateTime, HanaDbType.TimeStamp, value)
+                base(parmeterName, DbType.DateTime, value)
             { }
         }
 
         public class Decimal : DbParameter
         {
             public Decimal(string parmeterName, decimal? value = null) :
-                base(parmeterName, SqlDbType.Decimal, HanaDbType.Decimal, value)
+                base(parmeterName, DbType.Decimal, value)
             { }
         }
         public class Text : DbParameter
         {
             public Text(string parmeterName, string value = null) :
-                base(parmeterName, SqlDbType.NText, HanaDbType.Text, value)
+                base(parmeterName, DbType.String , value)
             { }
         }
         public class VarBinary : DbParameter
         {
             public VarBinary(string parmeterName, byte[] value = null, int? size = null) :
-                base(parmeterName, SqlDbType.VarBinary, HanaDbType.VarBinary, value, size)
+                base(parmeterName, DbType.Binary, value, size)
             { }
         }
         /// 
@@ -93,7 +89,7 @@ namespace DBMonad
         public class BLOB : DbParameter
         {
             public BLOB(string parmeterName, byte[] value = null) :
-                base(parmeterName, SqlDbType.Image, HanaDbType.Blob, value)
+                base(parmeterName, DbType.Binary, value)
             { }
         }
     }
@@ -172,6 +168,7 @@ namespace DBMonad
         public static string BuildConnectionString<TCon>(string server, ConnectionAuth auth, Option<string> database = new Option<string>())
             where TCon : DbConnection
         {
+            var a = typeof(TCon).Name;
             var dbStr =
                 database.Map(db =>
                     typeof(TCon).Name == "HanaConnection" ?
@@ -295,35 +292,16 @@ namespace DBMonad
 
         public static DbDataAdapter DataAdapter(DACommand command)
         {
-            DbDataAdapter dataAdapter;
-            if (command.cmd is SqlCommand sqlC)
-            {
-                dataAdapter = new SqlDataAdapter();
-                sqlC.Parameters.Cast<SqlParameter>().ToList().ForEach(p =>
+            command.cmd.Parameters.Cast<System.Data.Common.DbParameter>().ToList().ForEach(p =>
                 {
                     if (command.DbParamToColumnNameMap.TryGetValue(p.ParameterName, out Option<string> maybeColumnName))
                         maybeColumnName.MatchSome(cn => p.SourceColumn = cn);
                     else
                         p.SourceColumn = p.ParameterName.Replace("@", "");
                 });
-            }
-            else if (command.cmd is HanaCommand hanaC)
-            {
-                dataAdapter = new HanaDataAdapter();
-                hanaC.Parameters.Cast<HanaParameter>().ToList().ForEach(p =>
-                {
-                    if (command.DbParamToColumnNameMap.TryGetValue(p.ParameterName, out Option<string> maybeColumnName))
-                        maybeColumnName.MatchSome(cn => p.SourceColumn = cn);
-                    else
-                        p.SourceColumn = p.ParameterName;
-                });
-            }
-            else
-                throw new NotImplementedException(
-                    $"DBDataAdapter for command of type {command.cmd.GetType().FullName}, is not yet implemented"
-                );
-
-            return dataAdapter.AddCommand(command);
+            
+            return DbProviderFactories.GetFactory(command.cmd.Connection).CreateDataAdapter()
+                   .AddCommand(command);
         }
 
         public static Func<DbDataAdapter, int> ExecuteAndDispose(Func<DbDataAdapter, int> daMethodToExecute) =>
@@ -341,17 +319,17 @@ namespace DBMonad
 
         #region DbCommand
 
-        public static Func<DBState<DbConnection>, DbCommand> Command(string query, params DbParameter[] ps) =>
+        public static Func<DBState<DbConnection>, DbCommand> Command(string query, params System.Data.Common.DbParameter[] ps) =>
             Command<DbConnection>(query, ps);
-        public static Func<DBState<TCon>, DbCommand> Command<TCon>(string query , params DbParameter[] ps) 
+        public static Func<DBState<TCon>, DbCommand> Command<TCon>(string query , params System.Data.Common.DbParameter[] ps) 
             where TCon : DbConnection => 
             dbState => Command(dbState, query, ps);
 
-        public static DbCommand Command<TCon>(TCon dbCon, string query, params DbParameter[] ps) 
+        public static DbCommand Command<TCon>(TCon dbCon, string query, params System.Data.Common.DbParameter[] ps) 
             where TCon : DbConnection => 
             Command(new DBState<TCon>(dbCon), query, ps);
 
-        public static DbCommand Command<TCon>(DBState<TCon> dbState, string query, params DbParameter[] ps)
+        public static DbCommand Command<TCon>(DBState<TCon> dbState, string query, params System.Data.Common.DbParameter[] ps)
             where TCon : DbConnection 
         {
             var cmd = dbState.Connection.CreateCommand();
@@ -370,7 +348,7 @@ namespace DBMonad
         /// <param name="fileName">the query file name(without extensions)</param>
         /// <param name="ps"> DBMonad DBParameters which will be mapped to the correct DB Data provider Parameter</param>
         /// <returns></returns>
-        public static Func<DBState<DbConnection>, DbCommand> CommandFromFile(string fileName, params DbParameter[] ps) =>
+        public static Func<DBState<DbConnection>, DbCommand> CommandFromFile(string fileName, params System.Data.Common.DbParameter[] ps) =>
             dbState => CommandFromFile(dbState, fileName, ps);
 
         /// <summary>
@@ -384,11 +362,11 @@ namespace DBMonad
         /// NOTE: this should not be used unless the source for this list is secured in order to avoid SQL injections</param>
         /// <param name="ps"> DBMonad DBParameters which will be mapped to the correct DB Data provider Parameter</param>
         /// <returns></returns>
-         public static Func<DBState<DbConnection>, DbCommand> CommandFromFile(string fileName,string[] replaceInQueryStringList, params DbParameter[] ps) =>
+         public static Func<DBState<DbConnection>, DbCommand> CommandFromFile(string fileName,string[] replaceInQueryStringList, params System.Data.Common.DbParameter[] ps) =>
             dbState => CommandFromFile(dbState, fileName, replaceInQueryStringList, ps);
 
 
-        public static DbCommand CommandFromFile(DBState<DbConnection> dbState, string fileName, params DbParameter[] ps) =>
+        public static DbCommand CommandFromFile(DBState<DbConnection> dbState, string fileName, params System.Data.Common.DbParameter[] ps) =>
         CommandFromFile(dbState, fileName, new string[] { } , ps);
 
         /// <summary>
@@ -401,10 +379,10 @@ namespace DBMonad
         /// NOTE: this should not be used unless the source for this list is secured in order to avoid SQL injections</param>
         /// <param name="ps"> DBMonad DBParameters which will be mapped to the correct DB Data provider Parameter</param>
         /// <returns></returns>
-        public static DbCommand CommandFromFile<TCon>(DBState<TCon> dbState, string fileName, string[] replaceInQueryStringList, params DbParameter[] ps)
+        public static DbCommand CommandFromFile<TCon>(DBState<TCon> dbState, string fileName, string[] replaceInQueryStringList, params System.Data.Common.DbParameter[] ps)
             where TCon : DbConnection
         {
-            var fileExtension = typeof(TCon).Name.Replace("Connection","").ToLower();
+            var fileExtension = dbState.Connection.GetType().Name.Replace("Connection","").ToLower();
 
             var query = string.Format(QueryFromFile( 
                 dbState.AssemblyWithEmbResourcesQueries,
@@ -421,7 +399,7 @@ namespace DBMonad
                     p.ParameterName = dbP.ParameterName;
                     dbP.Value.MatchSome(v => p.Value = v);
                     dbP.Size.MatchSome(sz => p.Size = sz);
-                    p.DbType = DbType.AnsiString;//TODO
+                    p.DbType = p.DbType;
                     return p;
                 }).Aggregate(cmd, (acc, p) => { acc.Parameters.Add(p); return acc; });
 
@@ -450,13 +428,13 @@ namespace DBMonad
             this Func<DBState<DbConnection>, DbCommand> commandFactory,
             Func<DBState<TCon>, DbCommand> commandFactory2
             ) where TCon : DbConnection
-            => s => s is DBState<TCon> s2 ? commandFactory2(s2) : commandFactory(s);
+            => s => s.Connection is TCon ? commandFactory2(s.Cast<TCon>()) : commandFactory(s);
 
         public static Func<DBState<DbConnection>, DbCommand> Or<TCon>(
             this Func<DBState<TCon>, DbCommand> commandFactory,
              Func<DBState<DbConnection>, DbCommand> commandFactory2
             ) where TCon : DbConnection
-            => s => s is DBState<TCon> s2 ? commandFactory(s2): commandFactory2(s);
+            => s => s.Connection is TCon ? commandFactory(s.Cast<TCon>()): commandFactory2(s);
 
 
         public static Func<OneOf<DBState<TCon>, DBState<TCon2>, DBState<TCon3>>, DbCommand> Or<TCon, TCon2, TCon3>(
@@ -558,10 +536,6 @@ namespace DBMonad
         }
         #endregion
 
-        public static T Match<T>(this DbConnection c, Func<SqlConnection, T> sqlHandler, Func<HanaConnection, T> hanaHandler) =>
-            c is SqlConnection sqlC ? sqlHandler(sqlC) :
-            c is HanaConnection hanaC ? hanaHandler(hanaC) :
-            throw new NotImplementedException($"DBConnection of type:{c}, is not supported yet");
         #endregion
 
     }
@@ -583,6 +557,9 @@ namespace DBMonad
 
         public void Deconstruct(out TCon c, out Option<DbTransaction> t) =>
             (c, t) = (Connection, Transaction);
+
+        public DBState<TargetCon> Cast<TargetCon>() where TargetCon : DbConnection =>
+            new DBState<TargetCon>((TargetCon)(DbConnection)Connection, AssemblyWithEmbResourcesQueries, Transaction);
     }
 
 
@@ -694,7 +671,7 @@ namespace DBMonad
             =>
             css.Match(
                 c1 => WithTransaction<T, TCon>(c1.ConnectionString, dbState => queries(dbState).Value)
-                , c2 => WithTransaction<T, TCon>(c2.ConnectionString, dbState => queries(dbState).Value)
+                , c2 => WithTransaction<T, TCon2>(c2.ConnectionString, dbState => queries(dbState).Value)
             );
 
         public static Option<T,TError> RunWithTransaction<T, TError,  TCon, TCon2>(
@@ -705,7 +682,7 @@ namespace DBMonad
             =>
             css.Match(
                 c1 => WithTransaction<T,TError, TCon>(c1.ConnectionString, dbState => queries(dbState).Value)
-                , c2 => WithTransaction<T, TError, TCon>(c2.ConnectionString, dbState => queries(dbState).Value)
+                , c2 => WithTransaction<T, TError, TCon2>(c2.ConnectionString, dbState => queries(dbState).Value)
             );
 
         public static T RunWithTransaction<T,TCon>(this Queries<T, DBState<TCon>> queries, string connectionString)
@@ -727,7 +704,10 @@ namespace DBMonad
 
         public static T Run<T, TCon>(this Queries<T, DBState<DbConnection>> qs, DBConnectionString<TCon> cs)
             where TCon : DbConnection, new()
-            => WithConnection<T, TCon>(cs.ConnectionString, con => qs(new DBState<DbConnection> { Connection = con }).Value);
+            => WithConnection<T, TCon>(cs.ConnectionString, con =>
+                qs(new DBState<DbConnection>(con, cs.AssemblyWithEmbResourcesQueries)).Value);
+            
+            //qs(new DBState<DbConnection> { Connection = con }).Value);
 
         //Execute with alternatives
         public static T Run<T, TCon, TCon2>(this Queries<T, OneOf<DBState<TCon>, DBState<TCon2>>> qs,
@@ -812,122 +792,5 @@ namespace DBMonad
             );
     }
 
-
-    //Usage Example
-    public static partial class DB
-    {
-        internal static void Workflow()
-        {
-            //Simple Examples
-
-            //Simple Example 1
-            var sqlQuery = Command<SqlConnection>("select '123'").Then(c => (string)c.ExecuteScalar());
-            string sqlQueryResult = sqlQuery.Run("connectionString");
-
-            //Simple Example 2
-            var bolOfRead =
-                Command<HanaConnection>("sfds").Then(c => c.ExecuteReader())
-                    .Map(dr => dr.Read())
-                    .Run("CS");
-
-            //Queries that contain value(DBProvider wont be used)
-            Queries<string, DBState<HanaConnection>> d1 = s => ("", s);
-
-            //Multiple DBProvider options
-            var oneOfQueries =
-                Command<SqlConnection>("select col1 from t1").Or(Command<HanaConnection>("select \"col1\" from \"t1\""))
-                .AddParameters(new DbParameter.NVarChar("p1", "v1"), new DbParameter.BigInt("p2", 2))
-                .Then(c => c.ExecuteReader()).Map(Convert.ToDateTime);
-
-
-            var hanaCon = new DBConnectionString<HanaConnection>("hanaCS");
-            var sqlCon = new DBConnectionString<SqlConnection>("sqlCS");
-
-            //Run can be either DBConnectionString 
-            DateTime sqlResult = oneOfQueries.Run(sqlCon); 
-            DateTime hanaResult = oneOfQueries.Run(hanaCon);
-
-            //or DBConnectionData (child object of DBConnectionString)
-            var sqlConData = new DBConnectionData<SqlConnection>("serverName", new ConnectionAuth.UserAndPass("u","p"), "DB");
-            DateTime sqlResult2 = oneOfQueries.Run(sqlConData); 
-
-
-            //This can be a DBConnectionString/DBConnectionData with any connection type. If command from file cannot find an emmbeded query file with the specified name
-            //And extension name(based on the connection type name) runtime error gonna be thrown.
-            var resultFromQueriesFromFile = CommandFromFile("embededFileNameOfQuery").Then(c => c.ExecuteScalar()).Run(sqlCon);
-                
-
-            var resultFromEitherqueryFromFileOrQueryFromCommand = CommandFromFile("embededFileNameOfQuery")
-                .Or(
-                    //Will run for sql only the rest gonna use CommandFromFile
-                    Command<SqlConnection>("select 1")
-                ).Then(c => c.ExecuteScalar()).Run(hanaCon) ;
-
-            var str =
-                CommandFromFile("file").Then(c => (int)c.ExecuteScalar())
-                .FlatMap(i =>
-                    Command("select 'im string'").Then(c => (string)c.ExecuteScalar())
-                ).Run(new DBConnectionData<SqlConnection>("s1", new ConnectionAuth.UserAndPass("u", "12345"), "db"));
-
-
-            //LINQ example
-            var qs =
-                from queryResult in Command<SqlConnection>("query1").Then(c => c.ExecuteScalar()).Map(Convert.ToDouble)
-                from queryResult2 in Command<SqlConnection>("query2").Then(c => c.ExecuteScalar()).Map(Convert.ToDateTime)
-                //Note that the queries state needs to stay the same throwout the computation so the following wont compile
-                //If alternative is needed "Or" should be used before "Then"
-                select (queryResult, queryResult2);
-
-            var (r1, r2) = qs.Run("CS");
-
-            //Multiple DBProvider options
-            var qs2 =
-                from queryResult in Command<SqlConnection>("sQuery1").Or(Command<HanaConnection>("hQuery1"))
-                                    .Then(c => c.ExecuteScalar()).Map(Convert.ToDouble)
-                from queryResult2 in Command<SqlConnection>("sQuery2").Or(Command<HanaConnection>("hQuery2"))
-                                    .Then(c => c.ExecuteScalar()).Map(Convert.ToDouble)
-                select (queryResult, queryResult2);
-
-
-            var (mulDBR1, mulDBR2) = qs2.Run(new DBConnectionString<SqlConnection>("CS"));
-
-            //Transactions
-            var (mulDBR3, mulDBR4) = qs2.RunWithTransaction(new DBConnectionString<HanaConnection>("CS"));
-            
-            //If queries return type is of type Option<T,TError> 
-            //if runned in transaction and TError was returned, the transaction will be rolled back
-            var qsT =
-                from queryResult in Command<SqlConnection>("sQuery1").Or(Command<HanaConnection>("hQuery1"))
-                                    .Then(c => c.ExecuteScalar()).Map(Convert.ToDouble)
-                from queryResult2 in Command<SqlConnection>("sQuery2").Or(Command<HanaConnection>("hQuery2"))
-                                    .Then(c => c.ExecuteScalar()).Map(Convert.ToDouble)
-                select Option.None<TMDBConnector.Unit, string>("some error this will rollback the transaction");
-
-
-            var optionalWillContainErr = qsT.RunWithTransaction(new DBConnectionString<SqlConnection>("CS"));
-
-            
-
-
-
-            //Streaming (Reactive Extensions)
-            var dbMainStream = CommandFromFile("selectALotOfRowsQuery")
-                .Then(EnumerateRows).ToObservable(new DBConnectionString<SqlConnection>("CS"));
-
-            var stopTrigger =
-                Observable.Interval(TimeSpan.FromSeconds(2))
-                .Select(_ =>
-                    CommandFromFile("checkIfTableHasNewRows").Then(c => c.ExecuteScalar()).Map(Convert.ToInt32)
-                    .Run(hanaCon)
-                );
-
-            var bigQueryWithRefresh = dbMainStream.WithLatestFrom(stopTrigger, (d,i)=> (d:d,i:i))
-                .TakeWhile(t=>(int)t.d["c1"]<t.i).Select(t=> t.d) ;
-
-            //bigQueryWithRefresh.Subscribe(row => Console.WriteLine(row["c2"]));
-            stopTrigger.Subscribe(row => Console.WriteLine(row.ToString()));
-
-        }
-    }
 
 }
