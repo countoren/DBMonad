@@ -26,4 +26,4 @@ jobs:
     - name: Restore packages
       run: nuget restore DBMonad.sln
     - name: build with msbuild
-      run: msbuild DBMonad.sln -p:Configuration=Release
+      run: msbuild DBMonad.sln /p:Configuration=Release
