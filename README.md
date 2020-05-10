@@ -7,8 +7,8 @@ All the main functionality is built in static methods and the state is managed(h
 
 ## Less verbosity
 
-Queries type provides a run-in connection cotext therefor some method execution can be hidden(open, close, dispose, transactions handling...) 
-and extensions methods help with having a more fluent interface (can be written as expressions only). 
+```Queries``` type provides a run-in connection context therefor some of the DBProvider's methods can be hidden(open, close, dispose, transactions handling...).
+DBMonad contains extensions methods that help with having a more fluent interface and the entire DB integration can be written with expressions only. 
 
 ## Reusability
 
