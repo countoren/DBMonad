@@ -2,24 +2,28 @@
 
 ## Imperative to Functional
 
-This library was made to make the .net DB Client(DBConnection , DBCommand...) interface more reusable by providing higher level monadic interface.
-Moving from imperative interface to more functional one.
-All the main functionality is built in static methods.
+This library was made to make the .net DB Providers(DBConnection, DBCommand...) interface more functional and have more compile-time guarantees.
+All the main functionality is built-in static methods and state is managed(hidden) "behind" a monad type which represents the DB queries.
 
-## Unifying DB providers - less verbosity
+## Less verbosity
 
-The DB Providers are not exposed (except "Then" method which exposes the DBCommand to choose the quering method)
-therefore reduce the verbosity that exists in the current DB Client's interface.
+Queries type provides a run-in connection cotext therefor some method execution can be hidden(open, close, dispose, transactions handling...) 
+and extensions methods help with having a more fluent interface (can be written as expressions only). 
 
 ## Reusability
 
 the ```Queries<T,DbState<TCon>>``` type "holds" a DB computation that can be composed of other Queries(with their DB parameters) therefore it can be stored in a variable or returned from a method without actually evaluating the expressions.
-* T - represnt a return type from the queries
+* T - represents a return type from the queries
 * ```DBState<TCon>``` - is a DB state of TCon type (like SqlConnection) that contains properties like (like Connection, transaction...) 
-  
+
+## Installtion
+
+The package can be download from [Nuget](https://www.nuget.org/packages/DBMonad) either from  the GUI or the NuGet CLI tool with:
+```Install-Package DBMonad```
+
 ## Simple Example:
 
-.Net DbProvider interface simple SqlConnection: 
+.Net DbProvider interface simple SqlConnection based on [Microsoft SqlConnection Example](https://docs.microsoft.com/en-us/dotnet/api/microsoft.data.sqlclient.sqlconnection?view=sqlclient-dotnet-core-1.1): 
 ```
   using(var connection = new SQLConnection("sql connection string"))
   {
@@ -35,7 +39,7 @@ the ```Queries<T,DbState<TCon>>``` type "holds" a DB computation that can be com
 DB Monad interface simple SqlConnection:
 ```
   var result =  Command<SqlConnection>("some sql query")
-	  .Then(c => c.ExecuteScalar()).Map(Convert.ToDateTime).Run("CS")
+	  .Then(c => c.ExecuteScalar()).Map(Convert.ToDateTime).Run("ConnectionString")
 ```
 
 ## More complex example with transaction and Alternatives of DBProviders:
