@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<package >
+  <metadata>
+    <id>DBMonad</id>
+    <version>1.0.0</version>
+    <authors>Oren Rozen</authors>
+    <owners>Oren Rozen</owners>
+    <license type="expression">MIT</license>
+    <projectUrl>https://github.com/countoren/DBMonad</projectUrl>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <description>
+      Small Wrapper library for .net DBProviders which gives more functional interface(Monad,Functor ...) to hide the DB State 
+      and gives more type level guaranties
+    </description>
+    <copyright>Copyright 2020</copyright>
+    <tags>DBProvider SQL Monad</tags>
+  </metadata>
+</package>
