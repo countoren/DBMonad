@@ -3,7 +3,7 @@
 ## Imperative to Functional
 
 This library was made to make the .net DB Providers(DBConnection, DBCommand...) interface more functional and have more compile-time guarantees.
-All the main functionality is built-in static methods and state is managed(hidden) "behind" a monad type which represents the DB queries.
+All the main functionality is built in static methods and the state is managed(hidden) "behind" a monad type which represents the DB queries.
 
 ## Less verbosity
 
