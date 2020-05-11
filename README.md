@@ -16,7 +16,7 @@ the ```Queries<T,DbState<TCon>>``` type "holds" a DB computation that can be com
 * T - represents a return type from the queries
 * ```DBState<TCon>``` - is a DB state of TCon type (like SqlConnection) that contains properties like (like Connection, transaction...) 
 
-## Installtion
+## Installation
 
 The package can be download from [Nuget](https://www.nuget.org/packages/DBMonad) either from  the GUI or the NuGet CLI tool with:
 ```Install-Package DBMonad```
