@@ -21,10 +21,10 @@ the ```Queries<T,DbState<TCon>>``` type "holds" a DB computation that can be com
 The package can be download from [Nuget](https://www.nuget.org/packages/DBMonad) either from  the GUI or the NuGet CLI tool with:
 ```Install-Package DBMonad```
 
-## Simple Example:
+## Simple Examples:
 
-.Net DbProvider interface simple SqlConnection based on [Microsoft SqlConnection Example](https://docs.microsoft.com/en-us/dotnet/api/microsoft.data.sqlclient.sqlconnection?view=sqlclient-dotnet-core-1.1): 
-```
+__.Net DbProvider__ interface simple SqlConnection based on [Microsoft SqlConnection Example](https://docs.microsoft.com/en-us/dotnet/api/microsoft.data.sqlclient.sqlconnection?view=sqlclient-dotnet-core-1.1): 
+```CS
   using(var connection = new SQLConnection("sql connection string"))
   {
      connection.Open();
@@ -36,17 +36,17 @@ The package can be download from [Nuget](https://www.nuget.org/packages/DBMonad)
   }
 ```
 
-DB Monad interface simple SqlConnection:
-```
+__DB Monad__ interface simple SqlConnection:
+```CS
   var result =  Command<SqlConnection>("some sql query")
 	  .Then(c => c.ExecuteScalar()).Map(Convert.ToDateTime).Run("ConnectionString")
 ```
 
 ## More complex example with transaction and Alternatives of DBProviders:
 
-.Net DbProvider interface:
+__.Net DbProvider__ interface:
 
-```
+```cs
 If(isInSqlConfiguration)
 { 
     using (SqlConnection connection = new SqlConnection(connectionString))
@@ -115,8 +115,8 @@ If(isInHanaConfiguration)
 }
 ```
 
-DB Monad interface:
-```
+__DB Monad__ interface:
+```cs
 Command<SqlConnection>("1st insert query sql").Or(Command<HanaConnection>("1st insert query hana"))
 .Then(c=> c.ExecuteNonQuery())
 .FlatMap(_=>
@@ -128,7 +128,7 @@ Command<SqlConnection>("1st insert query sql").Or(Command<HanaConnection>("1st i
 ## LINQ
 
 The query value can be "extracted" with from in linq syntax(do blocks in haskell):
-```
+```cs
 var qs2 =
 	from queryResult in 
 	   Command<SqlConnection>("select 3.2").Or(Command<HanaConnection>("select 4.3 from dummy"))
