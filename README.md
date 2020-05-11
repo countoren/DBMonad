@@ -2,13 +2,13 @@
 
 ## Imperative to Functional
 
-This library was made to make the .net DB Providers(DBConnection, DBCommand...) interface more functional and have more compile-time guarantees.
-All the main functionality is built-in static methods and state is managed(hidden) "behind" a monad type which represents the DB queries.
+This library is a thin wrapper over the .net DB Providers(DBConnection, DBCommand...) it was made to make the interface more functional and have more compile-time guarantees.
+All the main functionality is built in static methods and the state is managed(hidden) "behind" a monad type which represents the DB queries.
 
 ## Less verbosity
 
-Queries type provides a run-in connection cotext therefor some method execution can be hidden(open, close, dispose, transactions handling...) 
-and extensions methods help with having a more fluent interface (can be written as expressions only). 
+```Queries``` type provides a run-in connection context therefor some of the DBProvider's methods can be hidden(open, close, dispose, transactions handling...).
+DBMonad contains extensions methods that help with having a more fluent interface and the entire DB integration can be written with expressions only. 
 
 ## Reusability
 
