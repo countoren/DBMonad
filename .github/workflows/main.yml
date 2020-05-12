@@ -26,4 +26,4 @@ jobs:
     
     - name: Publish to github nuget
       working-directory: .\output
-      run: nuget push *.nupkg -Source https://api.nuget.org/v3/index.json
+      run: nuget push *.nupkg -Source https://api.nuget.org/v3/index.json -NoSymbols
