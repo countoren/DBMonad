@@ -171,8 +171,9 @@ namespace DBMonad
             var a = typeof(TCon).Name;
             var dbStr =
                 database.Map(db =>
-                    typeof(TCon).Name == "HanaConnection" ?
-                    $"CS={db};":$"Initial Catalog={db};" 
+                    typeof(TCon).Name == "HanaConnection" 
+                    ? $"Current Schema={db};"
+                    : $"Initial Catalog={db};" 
                 ).ValueOr("");
 
             var authStr =
