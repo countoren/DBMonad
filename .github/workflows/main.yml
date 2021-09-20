@@ -14,7 +14,7 @@ jobs:
     
     # get nuget
     - name: Setup Nuget.exe
-      uses: warrenbuckley/Setup-Nuget@v1
+      uses: nuget/setup-nuget@v1.0.5
     
     # package up the packages. 
     - name: create packages
