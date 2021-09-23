@@ -19,7 +19,7 @@ jobs:
     # package up the packages. 
     - name: create packages
       run: | 
-        nuget pack DBMonad/DBMonad.nuspec -build -version ${{ github.event.release.tag_name }} -OutputDirectory .\output
+        nuget pack DBMonad/DBMonad.csproj -build -version ${{ github.event.release.tag_name }} -OutputDirectory .\output
     - name: Add Github Nuget repo
       run: |
         nuget setApiKey ${{ secrets.NugetAPI }}         
