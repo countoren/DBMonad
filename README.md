@@ -14,7 +14,7 @@ DBMonad contains extensions methods that help with having a more fluent interfac
 
 the ```Queries<T,DbState<TCon>>``` type "holds" a DB computation that can be composed of other Queries(with their DB parameters) therefore it can be stored in a variable or returned from a method without actually evaluating the expressions.
 * T - represents a return type from the queries
-* ```DBState<TCon>``` - is a DB state of TCon type (like SqlConnection) that contains properties like (like Connection, transaction...) 
+* ```DBState<TCon>``` - is a DB state of TCon type (like SqlConnection) that contains properties Connection and transaction. 
 
 ## Installation
 
